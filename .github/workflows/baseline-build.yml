@@ -98,7 +98,7 @@ jobs:
             --branch v3_openjdk \
             --depth 1 \
             --recurse-submodules \
-            https://github.com/AngelAuraMC/Amethyst-Android.git \
+            https://github.com/Minehacker765/Amethyst-Android-Offline-Support.git \
             source
 
       - name: Customize MobileChunkLab Identity
