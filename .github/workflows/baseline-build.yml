@@ -17,18 +17,15 @@ jobs:
       ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
 
     steps:
-      # دریافت مخزن اصلی
       - name: Checkout
         uses: actions/checkout@v5
 
-      # نصب Java
       - name: Setup Java
         uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: '17'
 
-      # آماده سازی Android SDK
       - name: Prepare Android SDK
         shell: bash
         run: |
@@ -65,7 +62,6 @@ jobs:
 
           "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --version
 
-      # پذیرش مجوزها
       - name: Accept Android SDK Licenses
         shell: bash
         run: |
@@ -73,7 +69,6 @@ jobs:
           yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" \
             --sdk_root="$ANDROID_HOME" --licenses || true
 
-      # نصب ابزارهای اندروید
       - name: Install Android Dependencies
         shell: bash
         run: |
@@ -85,19 +80,21 @@ jobs:
             "ndk;27.3.13750724" \
             "cmake;3.22.1"
 
-      # تبدیل SSH به HTTPS برای GitHub
       - name: Configure Git HTTPS
         shell: bash
         run: |
-          git config --global \
+          git config --global --add \
             url."https://github.com/".insteadOf \
             "git@github.com:"
 
-          git config --global \
+          git config --global --add \
             url."https://github.com/".insteadOf \
             "ssh://git@github.com/"
 
-      # دریافت Amethyst و زیرماژول ها
+          echo "Configured Git URL rewrites:"
+          git config --global --get-all \
+            url."https://github.com/".insteadOf
+
       - name: Download Amethyst
         shell: bash
         run: |
@@ -108,16 +105,13 @@ jobs:
             https://github.com/AngelAuraMC/Amethyst-Android.git \
             source
 
-      # بررسی سورس
       - name: Check Project
         shell: bash
         run: |
           test -f source/gradlew
           echo "Amethyst source downloaded successfully"
-
           git -C source submodule status
 
-      # ساخت APK
       - name: Build Debug APK
         shell: bash
         run: |
@@ -125,7 +119,6 @@ jobs:
           cd source
           ./gradlew :app_pojavlauncher:assembleDebug --stacktrace
 
-      # ذخیره خروجی
       - name: Upload APK
         if: success()
         uses: actions/upload-artifact@v4
