@@ -11,17 +11,20 @@ jobs:
     runs-on: ubuntu-22.04
 
     steps:
-      - name: Checkout MobileChunkLab
-        uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v5
 
       - name: Setup Java
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: '17'
 
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
+
+      - name: Accept Android SDK licenses
+        run: yes | sdkmanager --licenses
 
       - name: Install Android dependencies
         run: |
@@ -31,7 +34,7 @@ jobs:
             "ndk;27.3.13750724" \
             "cmake;3.22.1"
 
-      - name: Download Amethyst with submodules
+      - name: Download Amethyst
         run: |
           git clone \
             --branch v3_openjdk \
@@ -40,7 +43,7 @@ jobs:
             https://github.com/AngelAuraMC/Amethyst-Android.git \
             source
 
-      - name: Build Debug APK
+      - name: Build APK
         run: |
           chmod +x source/gradlew
           cd source
