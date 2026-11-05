@@ -17,16 +17,18 @@ jobs:
       ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
 
     steps:
+      # دریافت مخزن اصلی
       - name: Checkout
         uses: actions/checkout@v5
 
+      # نصب Java
       - name: Setup Java
         uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: '17'
 
-      # آماده سازی SDK و پیدا کردن sdkmanager
+      # آماده سازی Android SDK
       - name: Prepare Android SDK
         shell: bash
         run: |
@@ -43,8 +45,6 @@ jobs:
               "$ANDROID_HOME/cmdline-tools/latest/"
 
           else
-            echo "Downloading Android command line tools"
-
             curl -fL \
               https://dl.google.com/android/repository/commandlinetools-linux-12266719_latest.zip \
               -o "$RUNNER_TEMP/android-tools.zip"
@@ -65,13 +65,13 @@ jobs:
 
           "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --version
 
-      # پذیرش مجوزهای SDK
+      # پذیرش مجوزها
       - name: Accept Android SDK Licenses
         shell: bash
         run: |
           set +o pipefail
           yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" \
-            --sdk_root="$ANDROID_HOME" --licenses
+            --sdk_root="$ANDROID_HOME" --licenses || true
 
       # نصب ابزارهای اندروید
       - name: Install Android Dependencies
@@ -85,7 +85,19 @@ jobs:
             "ndk;27.3.13750724" \
             "cmake;3.22.1"
 
-      # دریافت Amethyst
+      # تبدیل SSH به HTTPS برای GitHub
+      - name: Configure Git HTTPS
+        shell: bash
+        run: |
+          git config --global \
+            url."https://github.com/".insteadOf \
+            "git@github.com:"
+
+          git config --global \
+            url."https://github.com/".insteadOf \
+            "ssh://git@github.com/"
+
+      # دریافت Amethyst و زیرماژول ها
       - name: Download Amethyst
         shell: bash
         run: |
@@ -96,12 +108,14 @@ jobs:
             https://github.com/AngelAuraMC/Amethyst-Android.git \
             source
 
-      # بررسی فایل های پروژه
+      # بررسی سورس
       - name: Check Project
         shell: bash
         run: |
           test -f source/gradlew
           echo "Amethyst source downloaded successfully"
+
+          git -C source submodule status
 
       # ساخت APK
       - name: Build Debug APK
@@ -111,7 +125,7 @@ jobs:
           cd source
           ./gradlew :app_pojavlauncher:assembleDebug --stacktrace
 
-      # ذخیره APK
+      # ذخیره خروجی
       - name: Upload APK
         if: success()
         uses: actions/upload-artifact@v4
