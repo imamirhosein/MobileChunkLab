@@ -8,25 +8,37 @@ permissions:
 
 jobs:
   build:
+    name: Build Android Launcher
     runs-on: ubuntu-22.04
+    timeout-minutes: 60
 
     steps:
+      # دریافت سورس
       - name: Checkout
         uses: actions/checkout@v5
 
+      # نصب Java 17
       - name: Setup Java
         uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: '17'
 
+      # آماده‌سازی Android SDK بدون پذیرش خودکار داخلی
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
+        with:
+          accept-android-sdk-licenses: false
 
+      # پذیرش مجوزهای SDK
       - name: Accept Android SDK licenses
-        run: yes | sdkmanager --licenses
+        shell: bash
+        run: |
+          yes | sdkmanager --licenses
 
+      # نصب ابزارهای موردنیاز
       - name: Install Android dependencies
+        shell: bash
         run: |
           sdkmanager --install \
             "platforms;android-36" \
@@ -34,6 +46,7 @@ jobs:
             "ndk;27.3.13750724" \
             "cmake;3.22.1"
 
+      # دریافت سورس Amethyst و زیرماژول‌ها
       - name: Download Amethyst
         run: |
           git clone \
@@ -43,12 +56,22 @@ jobs:
             https://github.com/AngelAuraMC/Amethyst-Android.git \
             source
 
-      - name: Build APK
+      # بررسی وجود Gradle Wrapper
+      - name: Check project
+        run: |
+          test -f source/gradlew
+          test -f source/settings.gradle || test -f source/settings.gradle.kts
+          echo "Project files found."
+
+      # ساخت APK
+      - name: Build Debug APK
+        shell: bash
         run: |
           chmod +x source/gradlew
           cd source
           ./gradlew :app_pojavlauncher:assembleDebug --stacktrace
 
+      # ذخیره APK
       - name: Upload APK
         if: success()
         uses: actions/upload-artifact@v4
@@ -56,3 +79,4 @@ jobs:
           name: MobileChunkLab-Baseline-APK
           path: source/app_pojavlauncher/build/outputs/apk/debug/*.apk
           if-no-files-found: error
+          retention-days: 7
