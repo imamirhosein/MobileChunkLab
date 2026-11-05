@@ -1,0 +1,55 @@
+name: MobileChunkLab Baseline Build
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+
+    steps:
+      - name: Checkout MobileChunkLab
+        uses: actions/checkout@v4
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android dependencies
+        run: |
+          sdkmanager --install \
+            "platforms;android-36" \
+            "build-tools;36.0.0" \
+            "ndk;27.3.13750724" \
+            "cmake;3.22.1"
+
+      - name: Download Amethyst with submodules
+        run: |
+          git clone \
+            --branch v3_openjdk \
+            --depth 1 \
+            --recurse-submodules \
+            https://github.com/AngelAuraMC/Amethyst-Android.git \
+            source
+
+      - name: Build Debug APK
+        run: |
+          chmod +x source/gradlew
+          cd source
+          ./gradlew :app_pojavlauncher:assembleDebug --stacktrace
+
+      - name: Upload APK
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: MobileChunkLab-Baseline-APK
+          path: source/app_pojavlauncher/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
