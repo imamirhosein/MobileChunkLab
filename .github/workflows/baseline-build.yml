@@ -10,7 +10,7 @@ jobs:
   build:
     name: Build Android Launcher
     runs-on: ubuntu-22.04
-    timeout-minutes: 60
+    timeout-minutes: 90
 
     env:
       ANDROID_HOME: /usr/local/lib/android/sdk
@@ -26,34 +26,66 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      # تنظیم مستقیم Android SDK
-      - name: Configure Android SDK
+      # آماده سازی SDK و پیدا کردن sdkmanager
+      - name: Prepare Android SDK
         shell: bash
         run: |
-          echo "$ANDROID_HOME/platform-tools" >> "$GITHUB_PATH"
+          set -e
+
+          mkdir -p "$ANDROID_HOME/cmdline-tools"
+
+          if [ -x "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" ]; then
+            echo "Using existing SDK manager"
+
+          elif [ -x "$ANDROID_HOME/cmdline-tools/16.0/bin/sdkmanager" ]; then
+            mkdir -p "$ANDROID_HOME/cmdline-tools/latest"
+            cp -a "$ANDROID_HOME/cmdline-tools/16.0/." \
+              "$ANDROID_HOME/cmdline-tools/latest/"
+
+          else
+            echo "Downloading Android command line tools"
+
+            curl -fL \
+              https://dl.google.com/android/repository/commandlinetools-linux-12266719_latest.zip \
+              -o "$RUNNER_TEMP/android-tools.zip"
+
+            mkdir -p "$RUNNER_TEMP/android-tools"
+
+            unzip -q "$RUNNER_TEMP/android-tools.zip" \
+              -d "$RUNNER_TEMP/android-tools"
+
+            mkdir -p "$ANDROID_HOME/cmdline-tools/latest"
+
+            cp -a "$RUNNER_TEMP/android-tools/cmdline-tools/." \
+              "$ANDROID_HOME/cmdline-tools/latest/"
+          fi
+
           echo "$ANDROID_HOME/cmdline-tools/latest/bin" >> "$GITHUB_PATH"
-          echo "$ANDROID_HOME/build-tools/36.0.0" >> "$GITHUB_PATH"
+          echo "$ANDROID_HOME/platform-tools" >> "$GITHUB_PATH"
 
-          sdkmanager --version
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --version
 
-      # پذیرش مجوزها
-      - name: Accept SDK Licenses
+      # پذیرش مجوزهای SDK
+      - name: Accept Android SDK Licenses
         shell: bash
         run: |
           set +o pipefail
-          yes | sdkmanager --licenses || true
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" \
+            --sdk_root="$ANDROID_HOME" --licenses
 
-      # نصب وابستگی‌ها
+      # نصب ابزارهای اندروید
       - name: Install Android Dependencies
         shell: bash
         run: |
-          sdkmanager --install \
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" \
+            --sdk_root="$ANDROID_HOME" \
+            "platform-tools" \
             "platforms;android-36" \
             "build-tools;36.0.0" \
             "ndk;27.3.13750724" \
             "cmake;3.22.1"
 
-      # دریافت سورس Amethyst
+      # دریافت Amethyst
       - name: Download Amethyst
         shell: bash
         run: |
@@ -64,13 +96,14 @@ jobs:
             https://github.com/AngelAuraMC/Amethyst-Android.git \
             source
 
-      # بررسی سورس
+      # بررسی فایل های پروژه
       - name: Check Project
+        shell: bash
         run: |
           test -f source/gradlew
-          echo "Source downloaded successfully"
+          echo "Amethyst source downloaded successfully"
 
-      # کامپایل
+      # ساخت APK
       - name: Build Debug APK
         shell: bash
         run: |
@@ -78,7 +111,7 @@ jobs:
           cd source
           ./gradlew :app_pojavlauncher:assembleDebug --stacktrace
 
-      # ذخیره خروجی
+      # ذخیره APK
       - name: Upload APK
         if: success()
         uses: actions/upload-artifact@v4
