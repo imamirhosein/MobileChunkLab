@@ -12,32 +12,39 @@ jobs:
     runs-on: ubuntu-22.04
     timeout-minutes: 60
 
+    env:
+      ANDROID_HOME: /usr/local/lib/android/sdk
+      ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
+
     steps:
-      # دریافت سورس
       - name: Checkout
         uses: actions/checkout@v5
 
-      # نصب Java 17
       - name: Setup Java
         uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: '17'
 
-      # آماده‌سازی Android SDK بدون پذیرش خودکار داخلی
-      - name: Setup Android SDK
-        uses: android-actions/setup-android@v3
-        with:
-          accept-android-sdk-licenses: false
-
-      # پذیرش مجوزهای SDK
-      - name: Accept Android SDK licenses
+      # تنظیم مستقیم Android SDK
+      - name: Configure Android SDK
         shell: bash
         run: |
-          yes | sdkmanager --licenses
+          echo "$ANDROID_HOME/platform-tools" >> "$GITHUB_PATH"
+          echo "$ANDROID_HOME/cmdline-tools/latest/bin" >> "$GITHUB_PATH"
+          echo "$ANDROID_HOME/build-tools/36.0.0" >> "$GITHUB_PATH"
 
-      # نصب ابزارهای موردنیاز
-      - name: Install Android dependencies
+          sdkmanager --version
+
+      # پذیرش مجوزها
+      - name: Accept SDK Licenses
+        shell: bash
+        run: |
+          set +o pipefail
+          yes | sdkmanager --licenses || true
+
+      # نصب وابستگی‌ها
+      - name: Install Android Dependencies
         shell: bash
         run: |
           sdkmanager --install \
@@ -46,8 +53,9 @@ jobs:
             "ndk;27.3.13750724" \
             "cmake;3.22.1"
 
-      # دریافت سورس Amethyst و زیرماژول‌ها
+      # دریافت سورس Amethyst
       - name: Download Amethyst
+        shell: bash
         run: |
           git clone \
             --branch v3_openjdk \
@@ -56,14 +64,13 @@ jobs:
             https://github.com/AngelAuraMC/Amethyst-Android.git \
             source
 
-      # بررسی وجود Gradle Wrapper
-      - name: Check project
+      # بررسی سورس
+      - name: Check Project
         run: |
           test -f source/gradlew
-          test -f source/settings.gradle || test -f source/settings.gradle.kts
-          echo "Project files found."
+          echo "Source downloaded successfully"
 
-      # ساخت APK
+      # کامپایل
       - name: Build Debug APK
         shell: bash
         run: |
@@ -71,7 +78,7 @@ jobs:
           cd source
           ./gradlew :app_pojavlauncher:assembleDebug --stacktrace
 
-      # ذخیره APK
+      # ذخیره خروجی
       - name: Upload APK
         if: success()
         uses: actions/upload-artifact@v4
