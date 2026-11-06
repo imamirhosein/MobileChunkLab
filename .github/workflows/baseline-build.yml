@@ -9,12 +9,12 @@ permissions:
 jobs:
   build:
     name: Build MobileChunkLab ARM64
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-latest
     timeout-minutes: 120
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v5
+      - name: Checkout MobileChunkLab
+        uses: actions/checkout@v6
 
       - name: Configure Git HTTPS
         shell: bash
@@ -45,8 +45,25 @@ jobs:
 
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v5
+        with:
+          add-job-summary: on-failure
 
-      - name: Customize MobileChunkLab
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android,armv7-linux-androideabi,i686-linux-android,x86_64-linux-android
+
+      - name: Install cargo-ndk
+        shell: bash
+        run: |
+          cargo install cargo-ndk --locked
+
+          cargo --version
+          cargo ndk --version
+
+          rustup target list --installed
+
+      - name: Customize MobileChunkLab Identity
         shell: bash
         run: |
           python3 - <<'PY'
@@ -55,65 +72,90 @@ jobs:
           props = Path("source/ZalithLauncher/gradle.properties")
           gradle = Path("source/ZalithLauncher/build.gradle.kts")
 
-          p = props.read_text(encoding="utf-8")
+          if not props.is_file():
+              raise SystemExit("Launcher gradle.properties not found")
+
+          if not gradle.is_file():
+              raise SystemExit("Launcher build.gradle.kts not found")
+
+          content = props.read_text(encoding="utf-8")
 
           replacements = {
               "launcher_name=ZalithLauncher":
                   "launcher_name=MobileChunkLab",
+
               "launcher_app_name=Zalith Launcher":
                   "launcher_app_name=MobileChunkLab",
+
               "launcher_short_name=ZL2":
                   "launcher_short_name=MCL",
+
               "url_home=https://github.com/ZalithLauncher/ZalithLauncher2":
                   "url_home=https://github.com/imamirhosein/MobileChunkLab",
           }
 
           for old, new in replacements.items():
-              if old not in p:
-                  raise SystemExit(f"Missing property: {old}")
-              p = p.replace(old, new, 1)
+              if old not in content:
+                  raise SystemExit(f"Expected property not found: {old}")
 
-          props.write_text(p, encoding="utf-8")
+              content = content.replace(old, new, 1)
+              print(f"Updated: {old}")
 
-          g = gradle.read_text(encoding="utf-8")
+          props.write_text(content, encoding="utf-8")
+
+          content = gradle.read_text(encoding="utf-8")
 
           old = 'val zalithPackageName = "com.movtery.zalithlauncher"'
           new = 'val zalithPackageName = "dev.mobilechunklab.zalith"'
 
-          if old not in g:
-              raise SystemExit("Original package name not found")
+          if old not in content:
+              raise SystemExit("Original application package not found")
 
-          g = g.replace(old, new, 1)
-          gradle.write_text(g, encoding="utf-8")
+          content = content.replace(old, new, 1)
 
-          print("Identity configuration completed.")
+          gradle.write_text(content, encoding="utf-8")
+
+          print("MobileChunkLab identity configured successfully.")
           PY
 
-      - name: Verify Configuration
+      - name: Verify Build Environment
         shell: bash
         run: |
           test -f source/gradlew
           test -f source/ZalithLauncher/build.gradle.kts
           test -f source/ZalithLauncher/gradle.properties
+          test -f source/PetLib/build.gradle.kts
 
-          grep 'launcher_name=' source/ZalithLauncher/gradle.properties
-          grep 'launcher_app_name=' source/ZalithLauncher/gradle.properties
-          grep 'val zalithPackageName' source/ZalithLauncher/build.gradle.kts
+          command -v cargo
+          command -v rustup
+
+          cargo ndk --version
+
+          grep 'launcher_name=' \
+            source/ZalithLauncher/gradle.properties
+
+          grep 'launcher_app_name=' \
+            source/ZalithLauncher/gradle.properties
+
+          grep 'val zalithPackageName' \
+            source/ZalithLauncher/build.gradle.kts
 
       - name: Build ARM64 Debug APK
         shell: bash
         run: |
           chmod +x source/gradlew
+
           cd source
 
           ./gradlew \
             ZalithLauncher:assembleDebug \
             -Darch=arm64 \
+            --no-daemon \
             --stacktrace
 
-      - name: Upload APK
+      - name: Upload MobileChunkLab APK
         if: success()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: MobileChunkLab-Zalith-ARM64
           path: source/ZalithLauncher/build/outputs/apk/debug/*.apk
