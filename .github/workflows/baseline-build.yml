@@ -1,4 +1,4 @@
-name: MobileChunkLab Independent Build
+name: MobileChunkLab Zalith Build
 
 on:
   workflow_dispatch:
@@ -8,77 +8,13 @@ permissions:
 
 jobs:
   build:
-    name: Build MobileChunkLab
+    name: Build MobileChunkLab ARM64
     runs-on: ubuntu-22.04
-    timeout-minutes: 90
-
-    env:
-      ANDROID_HOME: /usr/local/lib/android/sdk
-      ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
+    timeout-minutes: 120
 
     steps:
-      - name: Checkout
+      - name: Checkout MobileChunkLab Repository
         uses: actions/checkout@v5
-
-      - name: Setup Java
-        uses: actions/setup-java@v5
-        with:
-          distribution: temurin
-          java-version: '17'
-
-      - name: Prepare Android SDK
-        shell: bash
-        run: |
-          set -e
-
-          mkdir -p "$ANDROID_HOME/cmdline-tools"
-
-          if [ -x "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" ]; then
-            echo "Using existing SDK manager"
-
-          elif [ -x "$ANDROID_HOME/cmdline-tools/16.0/bin/sdkmanager" ]; then
-            mkdir -p "$ANDROID_HOME/cmdline-tools/latest"
-            cp -a "$ANDROID_HOME/cmdline-tools/16.0/." \
-              "$ANDROID_HOME/cmdline-tools/latest/"
-
-          else
-            curl -fL \
-              https://dl.google.com/android/repository/commandlinetools-linux-12266719_latest.zip \
-              -o "$RUNNER_TEMP/android-tools.zip"
-
-            mkdir -p "$RUNNER_TEMP/android-tools"
-
-            unzip -q "$RUNNER_TEMP/android-tools.zip" \
-              -d "$RUNNER_TEMP/android-tools"
-
-            mkdir -p "$ANDROID_HOME/cmdline-tools/latest"
-
-            cp -a "$RUNNER_TEMP/android-tools/cmdline-tools/." \
-              "$ANDROID_HOME/cmdline-tools/latest/"
-          fi
-
-          echo "$ANDROID_HOME/cmdline-tools/latest/bin" >> "$GITHUB_PATH"
-          echo "$ANDROID_HOME/platform-tools" >> "$GITHUB_PATH"
-
-          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --version
-
-      - name: Accept Android SDK Licenses
-        shell: bash
-        run: |
-          set +o pipefail
-          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" \
-            --sdk_root="$ANDROID_HOME" --licenses || true
-
-      - name: Install Android Dependencies
-        shell: bash
-        run: |
-          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" \
-            --sdk_root="$ANDROID_HOME" \
-            "platform-tools" \
-            "platforms;android-36" \
-            "build-tools;36.0.0" \
-            "ndk;27.3.13750724" \
-            "cmake;3.22.1"
 
       - name: Configure Git HTTPS
         shell: bash
@@ -91,15 +27,35 @@ jobs:
             url."https://github.com/".insteadOf \
             "ssh://git@github.com/"
 
-      - name: Download Amethyst
+      - name: Clone ZalithLauncher2
         shell: bash
         run: |
           git clone \
-            --branch v3_openjdk \
+            --branch main \
             --depth 1 \
             --recurse-submodules \
-            https://github.com/Minehacker765/Amethyst-Android-Offline-Support.git \
+            https://github.com/ZalithLauncher/ZalithLauncher2.git \
             source
+
+      - name: Setup Java
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v5
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android Dependencies
+        shell: bash
+        run: |
+          sdkmanager \
+            "platform-tools" \
+            "platforms;android-37" \
+            "ndk;25.2.9519653"
 
       - name: Customize MobileChunkLab Identity
         shell: bash
@@ -107,70 +63,78 @@ jobs:
           python3 - <<'PY'
           from pathlib import Path
 
-          path = Path("source/app_pojavlauncher/build.gradle")
-          content = path.read_text(encoding="utf-8")
+          props = Path("source/ZalithLauncher/gradle.properties")
+          gradle = Path("source/ZalithLauncher/build.gradle.kts")
+
+          p = props.read_text(encoding="utf-8")
 
           replacements = {
-              'org.angelauramc.amethyst':
-                  'dev.mobilechunklab.launcher',
+              "launcher_name=ZalithLauncher":
+                  "launcher_name=MobileChunkLab",
 
-              '"Amethyst (Debug)"':
-                  '"MobileChunkLab"',
+              "launcher_app_name=Zalith Launcher":
+                  "launcher_app_name=MobileChunkLab",
 
-              '"Amethyst"':
-                  '"MobileChunkLab"',
+              "launcher_short_name=ZL2":
+                  "launcher_short_name=MCL",
+
+              "url_home=https://github.com/ZalithLauncher/ZalithLauncher2":
+                  "url_home=https://github.com/imamirhosein/MobileChunkLab",
           }
 
           for old, new in replacements.items():
-              count = content.count(old)
-              if count == 0:
-                  raise SystemExit(
-                      f"ERROR: Expected text not found: {old}"
-                  )
+              if old not in p:
+                  raise SystemExit(f"Missing property: {old}")
+              p = p.replace(old, new, 1)
 
-              content = content.replace(old, new)
-              print(f"Updated {old} -> {new} ({count} occurrence(s))")
+          props.write_text(p, encoding="utf-8")
 
-          path.write_text(content, encoding="utf-8")
+          g = gradle.read_text(encoding="utf-8")
 
-          print("MobileChunkLab identity configured successfully.")
+          old = 'val zalithPackageName = "com.movtery.zalithlauncher"'
+          new = 'val zalithPackageName = "dev.mobilechunklab.zalith"'
+
+          if old not in g:
+              raise SystemExit("Original application package not found")
+
+          g = g.replace(old, new, 1)
+          gradle.write_text(g, encoding="utf-8")
+
+          print("MobileChunkLab identity configured.")
           PY
 
-      - name: Verify Game Classification
-        shell: bash
-        run: |
-          MANIFEST="source/app_pojavlauncher/src/main/AndroidManifest.xml"
-
-          grep -q 'android:appCategory="game"' "$MANIFEST"
-          grep -q 'android:isGame="true"' "$MANIFEST"
-
-          echo "Game classification settings preserved."
-
-      - name: Check Project
+      - name: Verify Project Configuration
         shell: bash
         run: |
           test -f source/gradlew
-          test -f source/app_pojavlauncher/build.gradle
+          test -f source/ZalithLauncher/build.gradle.kts
+          test -f source/ZalithLauncher/gradle.properties
 
-          echo "Project ready."
-          grep -n 'applicationId ' \
-            source/app_pojavlauncher/build.gradle
+          grep -n 'launcher_name=' \
+            source/ZalithLauncher/gradle.properties
 
-          grep -n 'app_name' \
-            source/app_pojavlauncher/build.gradle
+          grep -n 'launcher_app_name=' \
+            source/ZalithLauncher/gradle.properties
 
-      - name: Build Debug APK
+          grep -n 'val zalithPackageName' \
+            source/ZalithLauncher/build.gradle.kts
+
+      - name: Build ARM64 Debug APK
         shell: bash
         run: |
           chmod +x source/gradlew
           cd source
-          ./gradlew :app_pojavlauncher:assembleDebug --stacktrace
 
-      - name: Upload APK
+          ./gradlew \
+            ZalithLauncher:assembleDebug \
+            -Darch=arm64 \
+            --stacktrace
+
+      - name: Upload MobileChunkLab APK
         if: success()
         uses: actions/upload-artifact@v4
         with:
-          name: MobileChunkLab-Independent-APK
-          path: source/app_pojavlauncher/build/outputs/apk/debug/*.apk
+          name: MobileChunkLab-Zalith-ARM64
+          path: source/ZalithLauncher/build/outputs/apk/debug/*.apk
           if-no-files-found: error
           retention-days: 7
