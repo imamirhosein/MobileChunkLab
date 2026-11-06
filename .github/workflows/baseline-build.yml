@@ -13,7 +13,7 @@ jobs:
     timeout-minutes: 120
 
     steps:
-      - name: Checkout MobileChunkLab Repository
+      - name: Checkout
         uses: actions/checkout@v5
 
       - name: Configure Git HTTPS
@@ -37,7 +37,7 @@ jobs:
             https://github.com/ZalithLauncher/ZalithLauncher2.git \
             source
 
-      - name: Setup Java
+      - name: Setup Java 21
         uses: actions/setup-java@v5
         with:
           distribution: temurin
@@ -46,18 +46,7 @@ jobs:
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v5
 
-      - name: Setup Android SDK
-        uses: android-actions/setup-android@v3
-
-      - name: Install Android Dependencies
-        shell: bash
-        run: |
-          sdkmanager \
-            "platform-tools" \
-            "platforms;android-37" \
-            "ndk;25.2.9519653"
-
-      - name: Customize MobileChunkLab Identity
+      - name: Customize MobileChunkLab
         shell: bash
         run: |
           python3 - <<'PY'
@@ -71,13 +60,10 @@ jobs:
           replacements = {
               "launcher_name=ZalithLauncher":
                   "launcher_name=MobileChunkLab",
-
               "launcher_app_name=Zalith Launcher":
                   "launcher_app_name=MobileChunkLab",
-
               "launcher_short_name=ZL2":
                   "launcher_short_name=MCL",
-
               "url_home=https://github.com/ZalithLauncher/ZalithLauncher2":
                   "url_home=https://github.com/imamirhosein/MobileChunkLab",
           }
@@ -95,29 +81,24 @@ jobs:
           new = 'val zalithPackageName = "dev.mobilechunklab.zalith"'
 
           if old not in g:
-              raise SystemExit("Original application package not found")
+              raise SystemExit("Original package name not found")
 
           g = g.replace(old, new, 1)
           gradle.write_text(g, encoding="utf-8")
 
-          print("MobileChunkLab identity configured.")
+          print("Identity configuration completed.")
           PY
 
-      - name: Verify Project Configuration
+      - name: Verify Configuration
         shell: bash
         run: |
           test -f source/gradlew
           test -f source/ZalithLauncher/build.gradle.kts
           test -f source/ZalithLauncher/gradle.properties
 
-          grep -n 'launcher_name=' \
-            source/ZalithLauncher/gradle.properties
-
-          grep -n 'launcher_app_name=' \
-            source/ZalithLauncher/gradle.properties
-
-          grep -n 'val zalithPackageName' \
-            source/ZalithLauncher/build.gradle.kts
+          grep 'launcher_name=' source/ZalithLauncher/gradle.properties
+          grep 'launcher_app_name=' source/ZalithLauncher/gradle.properties
+          grep 'val zalithPackageName' source/ZalithLauncher/build.gradle.kts
 
       - name: Build ARM64 Debug APK
         shell: bash
@@ -130,7 +111,7 @@ jobs:
             -Darch=arm64 \
             --stacktrace
 
-      - name: Upload MobileChunkLab APK
+      - name: Upload APK
         if: success()
         uses: actions/upload-artifact@v4
         with:
