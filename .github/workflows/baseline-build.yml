@@ -105,17 +105,33 @@ jobs:
 
           content = gradle.read_text(encoding="utf-8")
 
-          old = 'val zalithPackageName = "com.movtery.zalithlauncher"'
-          new = 'val zalithPackageName = "dev.mobilechunklab.zalith"'
+          # Keep the original namespace because Kotlin source files
+          # reference com.movtery.zalithlauncher.R.
+          original_namespace = (
+              'val zalithPackageName = "com.movtery.zalithlauncher"'
+          )
 
-          if old not in content:
-              raise SystemExit("Original application package not found")
+          if original_namespace not in content:
+              raise SystemExit("Original Zalith namespace variable not found")
 
-          content = content.replace(old, new, 1)
+          if "namespace = zalithPackageName" not in content:
+              raise SystemExit("Expected Android namespace declaration not found")
+
+          # Change only the installed application ID.
+          old_app_id = "applicationId = zalithPackageName"
+          new_app_id = 'applicationId = "dev.mobilechunklab.zalith"'
+
+          if content.count(old_app_id) != 1:
+              raise SystemExit(
+                  "Expected exactly one applicationId declaration was not found"
+              )
+
+          content = content.replace(old_app_id, new_app_id, 1)
 
           gradle.write_text(content, encoding="utf-8")
 
-          print("MobileChunkLab identity configured successfully.")
+          print("Original Kotlin namespace preserved.")
+          print("MobileChunkLab application ID configured successfully.")
           PY
 
       - name: Verify Build Environment
@@ -131,13 +147,21 @@ jobs:
 
           cargo ndk --version
 
+          echo "Launcher identity:"
           grep 'launcher_name=' \
             source/ZalithLauncher/gradle.properties
 
           grep 'launcher_app_name=' \
             source/ZalithLauncher/gradle.properties
 
+          echo "Android package configuration:"
           grep 'val zalithPackageName' \
+            source/ZalithLauncher/build.gradle.kts
+
+          grep 'namespace =' \
+            source/ZalithLauncher/build.gradle.kts
+
+          grep 'applicationId =' \
             source/ZalithLauncher/build.gradle.kts
 
       - name: Build ARM64 Debug APK
